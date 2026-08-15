@@ -1,1 +1,53 @@
+name: Build V2E Demo APK
 
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    name: Build release APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Flutter doctor
+        run: flutter doctor -v
+
+      - name: Generate Android platform folder
+        # Our repo only ships lib/ + pubspec.yaml. This regenerates a fresh,
+        # version-matched android/ project (gradlew, wrapper, manifests) using
+        # whatever Flutter/Gradle/AGP versions ship with this runner — it does
+        # NOT touch existing pubspec.yaml or lib/ files.
+        run: flutter create . --platforms=android --org com.v2e.demo --project-name sitevoice_v2e
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze (non-blocking, for visibility in logs)
+        run: flutter analyze || true
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: v2e-sitevoice-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
