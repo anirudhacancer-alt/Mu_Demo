@@ -1,0 +1,71 @@
+name: Build V2E Demo APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    name: Build release APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Flutter doctor
+        run: flutter doctor -v
+
+      - name: Generate Android platform folder
+        # Our repo only ships lib/ + pubspec.yaml. This regenerates a fresh,
+        # version-matched android/ project (gradlew, wrapper, manifests) using
+        # whatever Flutter/Gradle/AGP versions ship with this runner — it does
+        # NOT touch existing pubspec.yaml or lib/ files.
+        run: flutter create . --platforms=android --org com.v2e.demo --project-name sitevoice_v2e
+
+      - name: Raise Android minSdkVersion to 23
+        # The `record` package (real microphone recording) requires
+        # minSdk 23, and Firebase plugins require at least 19-23 depending
+        # on version. `flutter create` defaults to flutter.minSdkVersion
+        # (usually 21), so we bump it here. Handles both the older Groovy
+        # build.gradle syntax and the newer Kotlin DSL build.gradle.kts
+        # syntax — whichever one this Flutter version generates.
+        run: |
+          if [ -f android/app/build.gradle ]; then
+            sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 23/' android/app/build.gradle || true
+            sed -i 's/minSdkVersion flutter\.minSdkVersion/minSdkVersion 23/' android/app/build.gradle || true
+          fi
+          if [ -f android/app/build.gradle.kts ]; then
+            sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 23/' android/app/build.gradle.kts || true
+          fi
+          echo "---- resulting minSdk lines ----"
+          grep -rn "minSdk" android/app/build.gradle* || true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze (non-blocking, for visibility in logs)
+        run: flutter analyze || true
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: v2e-sitevoice-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error

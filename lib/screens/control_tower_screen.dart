@@ -6,8 +6,16 @@ import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
 import '../models/models.dart';
 
-class ControlTowerScreen extends StatelessWidget {
+class ControlTowerScreen extends StatefulWidget {
   const ControlTowerScreen({super.key});
+
+  @override
+  State<ControlTowerScreen> createState() => _ControlTowerScreenState();
+}
+
+class _ControlTowerScreenState extends State<ControlTowerScreen> {
+  String _taskFilter = 'All';
+  static const taskFilters = ['All', 'Open', 'In Progress', 'Blocked', 'Resolved'];
 
   @override
   Widget build(BuildContext context) {
@@ -153,6 +161,76 @@ class ControlTowerScreen extends StatelessWidget {
                       ),
                     ),
                   )),
+          // ---- "All Tasks" — includes Resolved/closed tasks alongside every
+          // other status, so completed work stays visible on the dashboard
+          // instead of only appearing in filtered risk views. ----
+          SectionHeader(
+            title: 'All Tasks',
+            subtitle: '${appState.tasks.length} total · every status, including completed',
+          ),
+          SizedBox(
+            height: 38,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: taskFilters.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (_, i) {
+                final f = taskFilters[i];
+                final selected = f == _taskFilter;
+                return ChoiceChip(
+                  label: Text(f, style: const TextStyle(fontSize: 12)),
+                  selected: selected,
+                  onSelected: (_) => setState(() => _taskFilter = f),
+                  selectedColor: AppColors.primary.withOpacity(0.35),
+                  backgroundColor: AppColors.surfaceLight,
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 10),
+          Builder(builder: (context) {
+            final filtered = appState.tasks
+                .where((t) => _taskFilter == 'All' || t.status == _taskFilter)
+                .toList();
+            if (filtered.isEmpty) {
+              return const EmptyState(message: 'No tasks in this filter.');
+            }
+            return Column(
+              children: filtered
+                  .map((t) => Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: PremiumCard(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(t.title,
+                                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                                    const SizedBox(height: 4),
+                                    Text('${t.tower} · ${t.floor} · Owner: ${t.owner}',
+                                        style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  TaskStatusChip(status: t.status),
+                                  const SizedBox(height: 4),
+                                  PriorityChip(priority: t.priority),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ))
+                  .toList(),
+            );
+          }),
           const SectionHeader(title: 'AI Risk & Escalation', subtitle: 'Aging blockers, repeated delays, material issues'),
           ...appState.riskAlerts.map((r) => Padding(
                 padding: const EdgeInsets.only(bottom: 12),

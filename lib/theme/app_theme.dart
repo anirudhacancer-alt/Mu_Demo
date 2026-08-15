@@ -78,6 +78,21 @@ Color priorityColor(String priority) {
   }
 }
 
+/// Colors for the cloud-sync status badge shown on captures/tasks once
+/// Firebase is wired up.
+Color cloudSyncColor(String status) {
+  switch (status) {
+    case 'synced':
+      return AppColors.success;
+    case 'syncing':
+      return AppColors.accentAmber;
+    case 'failed':
+      return AppColors.danger;
+    default:
+      return AppColors.textSecondary; // local
+  }
+}
+
 ThemeData buildAppTheme() {
   final base = ThemeData.dark(useMaterial3: true);
   return base.copyWith(

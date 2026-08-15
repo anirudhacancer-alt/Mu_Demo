@@ -122,6 +122,17 @@ class _TaskCard extends StatelessWidget {
                 PriorityChip(priority: task.priority),
                 if (task.isBlocker)
                   StatusChip(label: 'Aging ${task.agingDays}d', color: AppColors.accentCoral),
+                if (task.hasMedia)
+                  StatusChip(
+                    label: task.photos.isNotEmpty && task.videoFile != null
+                        ? 'Photo+Video'
+                        : task.photos.isNotEmpty
+                            ? '${task.photos.length} photo(s)'
+                            : task.videoFile != null
+                                ? 'Video'
+                                : 'Audio',
+                    color: AppColors.primary,
+                  ),
               ],
             ),
             const SizedBox(height: 8),
@@ -136,6 +147,11 @@ class _TaskCard extends StatelessWidget {
                 Text(_fmtDate(task.dueDate),
                     style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary)),
               ],
+            ),
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerRight,
+              child: CloudSyncBadge(status: task.cloudSyncStatus),
             ),
           ],
         ),
@@ -202,9 +218,31 @@ class _TaskDetailSheetState extends State<_TaskDetailSheet> {
               ),
             ),
             const SizedBox(height: 16),
-            Text(task.title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(task.title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                ),
+                CloudSyncBadge(status: task.cloudSyncStatus),
+              ],
+            ),
             const SizedBox(height: 6),
             Text(task.description, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.4)),
+            if (task.hasMedia) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  if (task.photos.isNotEmpty)
+                    StatusChip(label: '${task.photos.length} photo(s)', color: AppColors.primary),
+                  if (task.videoFile != null)
+                    const StatusChip(label: 'Video attached', color: AppColors.primary),
+                  if (task.audioFile != null)
+                    const StatusChip(label: 'Audio attached', color: AppColors.primary),
+                ],
+              ),
+            ],
             const SizedBox(height: 14),
             Wrap(
               spacing: 8,

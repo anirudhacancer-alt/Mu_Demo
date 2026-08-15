@@ -4,8 +4,15 @@ import 'state/app_state.dart';
 import 'theme/app_theme.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_shell.dart';
+import 'services/firebase_bridge.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Best-effort Firebase init — if firebase_options.dart still has
+  // placeholder values, or the device is offline, this fails silently and
+  // FirebaseBridge.available stays false. The app runs exactly as before
+  // (fully local) in that case; cloud sync is a pure bonus layer.
+  await FirebaseBridge.init();
   runApp(const V2EApp());
 }
 

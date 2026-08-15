@@ -1,7 +1,7 @@
 name: sitevoice_v2e
 description: "V2E - SiteVoice.AI prototype: voice-first construction site management"
 publish_to: 'none'
-version: 1.1.0+2
+version: 1.2.0+3
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -14,6 +14,17 @@ dependencies:
   image_picker: ^1.1.2
   intl: ^0.19.0
   fl_chart: ^0.68.0
+  # Real audio recording (microphone -> file). Requires Android minSdk 23,
+  # patched automatically in the CI workflow after `flutter create .`.
+  record: ^7.0.0
+  # Used to get a writable temp directory for recorded audio files.
+  path_provider: ^2.1.4
+  # Firebase — stores credentials (mirrored), captured updates, tasks, and
+  # uploaded photo/video/audio files. See lib/firebase_options.dart for the
+  # 5 values you must fill in after creating your own Firebase project.
+  firebase_core: any
+  cloud_firestore: any
+  firebase_storage: any
 
 dev_dependencies:
   flutter_test:

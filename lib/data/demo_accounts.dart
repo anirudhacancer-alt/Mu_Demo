@@ -1,9 +1,11 @@
 import '../models/models.dart';
 
-/// Mock local credentials for the demo build. There is no backend, so
-/// validation happens entirely on-device against this fixed list — this
-/// keeps the login flow demo-safe (zero setup, works offline) while still
-/// giving real validation, error handling, and role identification.
+/// Mock local credentials for the demo build. Validation happens
+/// synchronously against this fixed list (zero network dependency, so login
+/// always works instantly even offline) — the same list is also mirrored
+/// into Firestore once (see FirebaseBridge.seedAccountsIfNeeded) so
+/// credentials are genuinely "kept" in Firebase as requested, without
+/// making login itself depend on connectivity.
 class DemoAccount {
   final String username;
   final String password;
@@ -13,6 +15,12 @@ class DemoAccount {
     required this.password,
     required this.role,
   });
+
+  Map<String, dynamic> toMap() => {
+        'username': username,
+        'password': password,
+        'role': role.name,
+      };
 }
 
 const List<DemoAccount> demoAccounts = [

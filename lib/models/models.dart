@@ -32,8 +32,14 @@ class SiteTask {
   final DateTime createdAt;
   bool isBlocker;
   final List<File> photos;
+  final File? videoFile;
+  final File? audioFile;
   final String? sourceTranscript;
   final String? sourceCapturedUpdateId;
+
+  /// 'local' | 'syncing' | 'synced' | 'failed' — reflects whether this task
+  /// has been mirrored to Firebase (Firestore doc + any Storage uploads).
+  String cloudSyncStatus;
 
   SiteTask({
     required this.id,
@@ -51,12 +57,17 @@ class SiteTask {
     DateTime? createdAt,
     this.isBlocker = false,
     List<File>? photos,
+    this.videoFile,
+    this.audioFile,
     this.sourceTranscript,
     this.sourceCapturedUpdateId,
+    this.cloudSyncStatus = 'local',
   })  : createdAt = createdAt ?? DateTime.now(),
         photos = photos ?? [];
 
   int get agingDays => DateTime.now().difference(createdAt).inDays;
+
+  bool get hasMedia => photos.isNotEmpty || videoFile != null || audioFile != null;
 }
 
 class ProcurementItem {
@@ -192,14 +203,18 @@ class SprintModel {
       endDate.difference(DateTime.now()).inDays.clamp(0, 999);
 }
 
-/// Raw captured field information (voice/photo/observation) BEFORE it has
-/// been reflected on and turned into an actionable task. This is the
-/// "capture-to-task reflection" staging area: captures land here first,
-/// and only become a SiteTask once a user explicitly reflects on them and
-/// sets owner/priority/due date/status.
+/// Raw captured field information BEFORE it has been reflected on and
+/// turned into an actionable task. This is the "capture-to-task reflection"
+/// staging area — captures land here first (from voice, real voice
+/// recording, photo, or video), and only become a SiteTask once a user
+/// explicitly reflects on them and sets owner/priority/due date/status.
 class CapturedUpdate {
   final String id;
-  final String transcript;
+
+  /// 'Voice (Demo)' | 'Voice (Recorded)' | 'Photo Report' | 'Video Report'
+  /// | 'Photo & Video Report'
+  final String sourceType;
+  final String transcript; // description text (typed or demo transcript)
   final String category;
   final String trade;
   final String tower;
@@ -212,8 +227,16 @@ class CapturedUpdate {
   bool reflected;
   String? linkedTaskId;
 
+  final List<File> photos;
+  final File? videoFile;
+  final File? audioFile;
+
+  /// 'local' | 'syncing' | 'synced' | 'failed'
+  String cloudSyncStatus;
+
   CapturedUpdate({
     required this.id,
+    required this.sourceType,
     required this.transcript,
     required this.category,
     required this.trade,
@@ -226,7 +249,14 @@ class CapturedUpdate {
     DateTime? createdAt,
     this.reflected = false,
     this.linkedTaskId,
-  }) : createdAt = createdAt ?? DateTime.now();
+    List<File>? photos,
+    this.videoFile,
+    this.audioFile,
+    this.cloudSyncStatus = 'local',
+  })  : createdAt = createdAt ?? DateTime.now(),
+        photos = photos ?? [];
+
+  bool get hasMedia => photos.isNotEmpty || videoFile != null || audioFile != null;
 }
 
 class RiskAlert {

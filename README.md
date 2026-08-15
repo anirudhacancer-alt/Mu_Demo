@@ -1,124 +1,163 @@
-# V2E · SiteVoice.AI — Demo Prototype (v1.1)
+# V2E · SiteVoice.AI — Demo Prototype (v1.2)
 
-A voice-first construction site management app. This version adds
-role-aware login, a capture-to-task reflection flow, a continuous daily
-standup record, and a cleaned-up procurement UI on top of the original 6
-modules.
+A voice-first construction site management app. This version adds real
+camera photo/video capture, real microphone recording, a "closed tasks
+visible on the dashboard" fix, and an optional Firebase backend on top of
+everything built so far.
 
 ## What's new in this version
 
-1. **Login with real validation** — pick a role, then sign in with a
-   username/password checked against a small local demo account list.
-   Wrong username, wrong password, or credentials for the wrong role each
-   show a specific inline error. After signing in, a confirmation banner
-   identifies who you're logged in as and in which role.
+### 1. Photo / Video Report → Task (Capture tab)
+A new card lets you **Take Photo** and/or **Record Video** with the real
+device camera, type a required **"Describe the issue"** text field (plus
+optional Tower/Floor and a Severity selector), then **Save Capture**. Like
+voice captures, it lands in "Captured Updates" — tap it to reflect (set
+Owner/Priority/Due Date/Status) and it becomes a real task that shows up in
+**Tasks** and, if it's a blocker or critical, in the **Control Tower**
+dashboard automatically (all screens read from the same shared task list).
 
-   **Demo credentials** (also viewable via "Show demo credentials" on the
-   login screen itself):
-   | Role | Username | Password |
-   |---|---|---|
-   | Supervisor | `supervisor` | `site123` |
-   | Site Engineer | `engineer` | `site123` |
-   | Project Manager | `manager` | `site123` |
+### 2. Closed/Resolved tasks now visible on the dashboard
+Control Tower has a new **"All Tasks"** section listing every task —
+Open, In Progress, Blocked, **and Resolved** — with filter chips, so
+completed work stays visible on the manager dashboard instead of only
+appearing in the Tasks tab's filters.
 
-2. **Capture → Reflect → Task** — voice/photo captures no longer turn
-   into a task automatically. They land in a "Captured Updates" log first.
-   Tap any pending capture to open the reflection step, where you set
-   **Owner, Priority (Low/Medium/High/Urgent), Due Date, and Status**
-   before it becomes an actual task.
+### 3. Real microphone recording → Task (Capture tab)
+A new **"Record Real Voice"** card actually records your microphone to an
+audio file (using the device's mic, not a simulation). Since genuine
+offline speech-to-text isn't feasible to add reliably in this timeframe,
+after you stop recording you type a short caption of what you said — the
+audio file travels with the capture (and uploads to Firebase Storage if
+configured) so the original recording is preserved alongside the caption.
+This sits **alongside**, not instead of, the original reliable demo-scenario
+voice card — use whichever fits the moment on stage.
 
-3. **Daily standup reflection layer** — "Start Standup" opens a form to log
-   Planned / Completed / Blocked / Key Learnings for the day. Each
-   submission is saved to a **Standup History** list (tap any past entry to
-   expand it) instead of disappearing after the meeting.
+### 4. Firebase backend (optional, off by default)
+Firebase is wired in to store credentials (mirrored), captured updates,
+tasks, and uploaded photo/video/audio files — **but it only activates once
+you provide your own project's config values** (see setup below). Until
+then, the app runs exactly as it did before: 100% local, offline-safe,
+zero risk to your demo.
 
-4. **Procurement UI fixes** (per your screenshot):
-   - Every material card's bottom row now always shows a clear action or a
-     "Completed" marker — no more empty dead space (previously the
-     "Delayed" card had nothing where others had a "Mark …" button).
-   - The **tab selector indicator now fills the entire tab segment**
-     (`TabBarIndicatorSize.tab`) instead of just wrapping the label text, so
-     both tabs look and feel consistent when switching.
-   - The whole tab segment (not just the text) is tappable/touchable, and
-     this "full tappable area" pattern was also applied to captured-update
-     cards and standup history rows — you can tap anywhere on those cards,
-     not just a small link/icon.
+- Every capture/task shows a small cloud badge (Synced / Syncing… / Sync
+  failed) once Firebase is configured and a sync has been attempted.
+- Task status changes (including marking something **Resolved/closed**)
+  are pushed to Firestore too, so the cloud record stays current.
+- Demo login credentials are mirrored into a Firestore `demo_accounts`
+  collection once Firebase connects — but **login itself still validates
+  locally/instantly**, never depending on network access. This keeps the
+  login screen 100% reliable during a live demo even if Firebase or WiFi
+  is having a bad day.
 
-5. **Manager dashboard restricted** — the Control Tower is only reachable
-   by the **Project Manager** role; Supervisors and Site Engineers never
-   see it in their navigation.
+---
 
-6. **Role-based navigation** — each role now gets a different set of tabs:
-   - **Supervisor**: Capture, Tasks, Daily
-   - **Site Engineer**: Capture, Tasks, Sprint, Procurement & QA
-   - **Project Manager**: Sprint, Procurement & QA, Control Tower
+## Setting up Firebase (optional, ~5 minutes, no CLI or local installs)
 
-   A "Demo: switch role" shortcut (tap the role pill, top-right) is still
-   available so you can show all three views quickly in a single demo
-   without re-logging in each time — clearly labeled as a presenter
-   convenience, not a security bypass.
+Firebase is **not required** for the app to work — skip this section
+entirely if you just want the local-only demo. If you want real cloud
+storage of photos/videos/audio and task/credential records:
 
-## Assumptions made (flag these if you want changes)
+1. Go to **https://console.firebase.google.com** → **Add project** → give
+   it a name (Google Analytics can be left off). Click **Create**.
+2. In the new project, click the **Android icon** ("Add app").
+3. For the Android package name, enter **exactly**:
+   ```
+   com.v2e.demo.sitevoice_v2e
+   ```
+   (this must match the CI workflow's `--org com.v2e.demo --project-name sitevoice_v2e`)
+4. App nickname is optional. Click **Register app**.
+5. You do **not** need to download `google-services.json` — click through
+   past that step (our setup uses pure-Dart initialization instead).
+6. Go to **Project settings** (gear icon, top-left) → **General** tab →
+   scroll to "Your apps" → click your Android app. You'll see 5 config
+   values: `apiKey`, `appId`, `messagingSenderId`, `projectId`,
+   `storageBucket`.
+7. Open `lib/firebase_options.dart` in this package and paste those 5
+   values into the matching fields (replacing the `'YOUR_...'` placeholders).
+8. Back in the Firebase console, enable the two services used:
+   - **Build → Firestore Database → Create database → Start in test mode**
+   - **Build → Storage → Get started → Start in test mode**
 
-- No 4th "Management/Leadership" role was added — the Project Manager's
-  Control Tower is treated as the top-level/portfolio view mentioned in
-  your notes. Say the word if you want a separate Management role with its
-  own even-higher-level view.
-- Login credentials are a small hardcoded local list (no backend) — keeps
-  the app 100% offline-safe for the demo. A real deployment would need a
-  proper auth service.
-- "Priority" was added as a new field distinct from "Severity" (severity =
-  how bad the issue is; priority = how urgently to act) since the reflection
-  step specifically asked for a priority setting.
-- Site Engineers were given both Capture and Procurement & QA access (their
-  original description mentioned QA/procurement/sprint, but they likely
-  still submit field updates too) — easy to trim if you'd rather they not
-  have Capture.
+   ⚠️ Test mode rules are intentionally open (no auth required) and expire
+   after 30 days — perfect for a demo, but flag this before using in
+   production; you'd want proper security rules + Firebase Auth at that
+   point.
+9. Commit your updated `firebase_options.dart`, push to `main`, and let the
+   GitHub Action rebuild the APK. Once installed, the Capture screen will
+   show "Firebase connected — captures sync automatically" and cloud badges
+   will start appearing on captures/tasks.
 
-## Getting the APK (unchanged process)
+If you skip all of this, the app detects the placeholder values, silently
+skips Firebase initialization, and runs in local-only mode — nothing
+breaks.
 
-There is still **no `android/` folder** in this package — GitHub Actions
-generates it fresh at build time. See the workflow file at
-`.github/workflows/build-apk.yml`.
+---
 
-### ⚠️ Upload reminder
-`.github` is a hidden folder. If dragging-and-dropping into GitHub's
-uploader, make sure your file browser shows hidden files first (macOS:
-`Cmd+Shift+.`; Windows: View → Show → Hidden items), or simplest — use
-GitHub's **"Add file → Create new file"** and type the path
-`.github/workflows/build-apk.yml` directly (this auto-creates the folders).
+## Getting the APK (same process as before)
 
-1. Push/upload this package's contents to a GitHub repo's `main` branch.
+No `android/` folder is shipped — GitHub Actions generates it fresh at
+build time (see `.github/workflows/build-apk.yml`, which now also patches
+`minSdkVersion` to 23, required by the real audio-recording package).
+
+1. Push/upload this package's contents to your GitHub repo's `main` branch.
+   (`.github` is a hidden folder — if drag-and-drop misses it, use GitHub's
+   **"Add file → Create new file"** and type the path
+   `.github/workflows/build-apk.yml` directly.)
 2. Check the **Actions** tab for the "Build V2E Demo APK" run.
-3. Download the `v2e-sitevoice-apk` artifact once the run is green.
-4. Transfer `app-release.apk` to your Android device and install it.
+3. Download the `v2e-sitevoice-apk` artifact once green.
+4. Install `app-release.apk` on your Android device (allow "install unknown
+   apps" for whichever app opens the file — one-time prompt).
 
-## Suggested demo flow (updated, ~7–9 minutes)
+On first launch, the app will ask for **Camera** and **Microphone**
+permissions the first time you use those specific capture cards — this is
+standard Android runtime permission handling, not something you need to
+configure.
 
-1. **Login screen** — show a wrong password first (error message), then
-   sign in correctly as `supervisor` / `site123`. Point out the "Logged in
-   as Supervisor" confirmation banner.
-2. **Capture** — pick a scenario chip, record, let it transcribe & structure,
-   tap **Save Capture**. Point out it's now sitting in "Captured Updates"
-   as "Needs Reflection" — not yet a task.
-3. Tap that captured update card → the **Reflect & Convert to Task** sheet
-   opens → set Owner/Priority/Due Date/Status → **Convert to Task** → show
-   it now appears in **Tasks**.
-4. **Daily** tab → **Start Standup** → fill in a couple of planned/completed
-   items and a key learning → **Save Standup** → scroll down to show it now
-   appears in **Standup History** alongside yesterday's entry.
-5. **Switch role** (role pill, top-right) to **Project Manager** — note the
-   nav bar changes to Sprint / Procurement & QA / Control Tower only (no
-   Capture/Tasks/Daily — those are field-role screens).
-6. **Procurement & QA** → point out every card now has a consistent action
-   in the bottom-right (including the Delayed one, which previously had
-   none) → tap between the two tabs and note the full-width blue indicator.
-7. **Control Tower** → KPI grid, AI Risk & Escalation, Weekly Review Pack —
-   note this is only visible to Project Manager, never to Supervisor.
+## Updated demo flow (~9–11 minutes)
 
-## Why this architecture (unchanged)
+1. **Login** as `supervisor` / `site123` → confirmation banner shows your role.
+2. **Capture** → try all three cards:
+   - Demo voice scenario (reliable, presenter-controlled) → Save Capture.
+   - **Record Real Voice** → speak, stop, type a caption → Save Capture.
+   - **Photo / Video Report** → take a photo (or record a short video),
+     describe the issue, pick a severity → Save Capture.
+3. Tap any "Needs Reflection" card → set Owner/Priority/Due Date/Status →
+   **Convert to Task** → confirm it now appears in **Tasks**.
+4. Open that task's detail sheet → change its status to **Resolved**.
+5. **Switch role** to **Project Manager** → **Control Tower** → scroll to
+   **All Tasks** → filter by **Resolved** → point out the task you just
+   closed is right there on the dashboard, not hidden away.
+6. If Firebase is configured: point out the cloud sync badges on captures/
+   tasks, and mention photos/videos/audio are now durably stored in
+   Firebase Storage, with metadata in Firestore — survivable even if the
+   phone is lost or the app is reinstalled.
+7. **Procurement & QA** → note the full-width tab indicator and consistent
+   per-card actions (carried over from the previous round of fixes).
 
-- Pure Flutter, minimal dependencies (`provider`, `image_picker`, `intl`,
-  `fl_chart`), no backend, no API keys — fully offline-safe for a live demo.
-- GitHub Actions builds the release APK in the cloud — no local Flutter or
-  Android Studio install needed.
+## Notes on what's simulated vs. real
+
+- **Photo capture**: 100% real — actual device camera via `image_picker`.
+- **Video capture**: 100% real — actual device camera recording via
+  `image_picker` (`pickVideo`, max 60s).
+- **Real voice recording**: 100% real audio file recorded from the
+  microphone via the `record` package. What's **not** included is
+  automatic speech-to-text on that recording — you type a caption instead.
+  (True on-device STT could be added later via the `speech_to_text`
+  package if wanted — flagged here as a possible follow-up, not implemented
+  now, to avoid the reliability risk of running two microphone-access
+  packages simultaneously.)
+- **Demo voice scenarios**: intentionally simulated (presenter-selected
+  scripts), kept exactly as before, for a guaranteed-reliable stage demo.
+- **Firebase sync**: 100% real when configured — uploads actual files to
+  Storage and writes real Firestore documents. Entirely optional and fails
+  silently/gracefully if not set up.
+
+## Why this architecture
+
+- Firebase init and every Firebase call are wrapped so failures **never**
+  crash or block the UI — the local `AppState` remains the single source
+  of truth for what's rendered on screen at all times.
+- `record` and `image_picker` both handle their own runtime permission
+  prompts internally — no extra permission-handling package was needed.
+- GitHub Actions still builds the release APK — no local Flutter/Android
+  Studio install needed on your machine.

@@ -41,13 +41,9 @@ class _ProcurementQaScreenState extends State<ProcurementQaScreen>
           ),
           child: TabBar(
             controller: _tabController,
-            // FIX: force the selection indicator to fill the ENTIRE tab
-            // segment (not just wrap tightly around the label text). The
-            // default TabBarIndicatorSize.label only sizes the indicator to
-            // the text width, which looked inconsistent between the two
-            // tabs (different label lengths) when switching. indicatorPadding
-            // adds a small inset so the pill doesn't touch the edges of its
-            // segment, while still covering the full tappable area.
+            // Force the selection indicator to fill the ENTIRE tab segment
+            // (not just wrap tightly around the label text), and make each
+            // whole segment tappable/touchable, not just the text.
             indicatorSize: TabBarIndicatorSize.tab,
             indicatorPadding: const EdgeInsets.all(4),
             indicator: BoxDecoration(
@@ -59,8 +55,6 @@ class _ProcurementQaScreenState extends State<ProcurementQaScreen>
             unselectedLabelColor: AppColors.textSecondary,
             dividerColor: Colors.transparent,
             labelStyle: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
-            // Tab already stretches to fill its full segment width/height,
-            // so the whole segment (not just the text) is tappable/touchable.
             tabs: const [
               Tab(height: 44, child: Center(child: Text('Procurement Tracker'))),
               Tab(height: 44, child: Center(child: Text('QA / Snag Management'))),
@@ -149,12 +143,6 @@ class _ProcurementTab extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 10),
-                    // FIX: the bottom row now ALWAYS shows something on the
-                    // right — either a "Mark <next stage>" action or a
-                    // "Completed" indicator for delivered items — instead of
-                    // sometimes being empty (as it was for "Delayed" items,
-                    // which had no next stage in the old logic and left an
-                    // awkward gap next to the required-by date).
                     Row(
                       children: [
                         const Icon(Icons.event_rounded, size: 14, color: AppColors.textSecondary),
@@ -188,12 +176,11 @@ class _StatusCycleAction extends StatelessWidget {
 
   String? _nextStatus(String current) {
     if (current == 'Delayed') {
-      // A resolved delay resumes as "In Transit".
       return 'In Transit';
     }
     final idx = stages.indexOf(current);
     if (idx >= 0 && idx < stages.length - 1) return stages[idx + 1];
-    return null; // Delivered — terminal, nothing further to mark.
+    return null;
   }
 
   @override

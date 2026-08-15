@@ -3,7 +3,8 @@ import '../models/models.dart';
 /// Canned "voice update" demo scenarios used to simulate the
 /// Speech-to-Text + AI Structuring journey without needing live
 /// microphone / cloud AI access during the demo (keeps it 100% reliable
-/// offline, on any device, first try).
+/// offline, on any device, first try). This sits alongside the REAL voice
+/// recording option in the Capture screen — presenters can choose either.
 class DemoTranscript {
   final String text;
   final String category;

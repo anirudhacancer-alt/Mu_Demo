@@ -181,6 +181,43 @@ class TaskStatusChip extends StatelessWidget {
       StatusChip(label: status, color: statusColor(status));
 }
 
+/// Small badge showing whether a capture/task has synced to Firebase.
+/// Shows nothing distracting when Firebase isn't configured at all —
+/// only appears once a sync has actually been attempted.
+class CloudSyncBadge extends StatelessWidget {
+  final String status; // 'local' | 'syncing' | 'synced' | 'failed'
+  const CloudSyncBadge({super.key, required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    if (status == 'local') return const SizedBox.shrink();
+    IconData icon;
+    String label;
+    switch (status) {
+      case 'synced':
+        icon = Icons.cloud_done_rounded;
+        label = 'Synced';
+        break;
+      case 'syncing':
+        icon = Icons.cloud_sync_rounded;
+        label = 'Syncing…';
+        break;
+      default:
+        icon = Icons.cloud_off_rounded;
+        label = 'Sync failed';
+    }
+    final color = cloudSyncColor(status);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 13, color: color),
+        const SizedBox(width: 4),
+        Text(label, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600)),
+      ],
+    );
+  }
+}
+
 class EmptyState extends StatelessWidget {
   final String message;
   final IconData icon;

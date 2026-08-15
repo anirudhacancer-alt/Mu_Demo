@@ -4,11 +4,29 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:record/record.dart';
+import 'package:path_provider/path_provider.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
 import '../data/mock_data.dart';
 import '../models/models.dart';
+
+IconData _iconForSourceType(String sourceType) {
+  switch (sourceType) {
+    case 'Voice (Demo)':
+    case 'Voice (Recorded)':
+      return Icons.mic_rounded;
+    case 'Video Report':
+      return Icons.videocam_rounded;
+    case 'Photo & Video Report':
+      return Icons.perm_media_rounded;
+    case 'Manual Report':
+      return Icons.edit_note_rounded;
+    default:
+      return Icons.photo_camera_rounded;
+  }
+}
 
 class CaptureScreen extends StatefulWidget {
   const CaptureScreen({super.key});
@@ -18,29 +36,12 @@ class CaptureScreen extends StatefulWidget {
 }
 
 class _CaptureScreenState extends State<CaptureScreen> {
-  final List<File> _sessionPhotos = [];
   final List<_ChecklistItem> _checklist = [
     _ChecklistItem('Safety helmets & PPE worn on site'),
     _ChecklistItem('Housekeeping — debris cleared from work zone'),
     _ChecklistItem('Scaffolding & guard rails secured'),
     _ChecklistItem('QA checkpoints signed off before pour/finish'),
   ];
-
-  Future<void> _pickPhoto(ImageSource source) async {
-    try {
-      final picker = ImagePicker();
-      final XFile? file = await picker.pickImage(source: source, imageQuality: 70);
-      if (file != null) {
-        setState(() => _sessionPhotos.add(File(file.path)));
-      }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Camera/gallery not available on this device.')),
-        );
-      }
-    }
-  }
 
   void _openReflectionSheet(BuildContext context, CapturedUpdate cu) {
     showModalBottomSheet(
@@ -63,29 +64,46 @@ class _CaptureScreenState extends State<CaptureScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (appState.firebaseEnabled)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                children: const [
+                  Icon(Icons.cloud_done_rounded, size: 14, color: AppColors.success),
+                  SizedBox(width: 6),
+                  Text('Firebase connected — captures sync automatically',
+                      style: TextStyle(fontSize: 11.5, color: AppColors.success)),
+                ],
+              ),
+            ),
           const _VoiceCaptureCard(),
+          const SizedBox(height: 14),
+          const _RealVoiceCaptureCard(),
+          const SizedBox(height: 14),
+          const _PhotoVideoCaptureCard(),
           SectionHeader(
             title: 'Captured Updates',
             subtitle: captures.isEmpty
-                ? 'Nothing captured yet — record an update above'
+                ? 'Nothing captured yet — record or report an update above'
                 : '${appState.pendingReflectionCount} awaiting reflection · tap any card to convert',
           ),
           if (captures.isEmpty)
             const EmptyState(
-              message: 'Captured voice updates land here first.\nReflect on each one to turn it into a task.',
+              message: 'Captures from voice, photo, or video land here first.\nReflect on each one to turn it into a task.',
               icon: Icons.inbox_outlined,
             )
           else
             ...captures.map((cu) => Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: PremiumCard(
-                    // Whole card is tappable, not just a small "Reflect" link.
                     onTap: cu.reflected ? null : () => _openReflectionSheet(context, cu),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
+                            Icon(_iconForSourceType(cu.sourceType), size: 16, color: AppColors.accentTeal),
+                            const SizedBox(width: 8),
                             Expanded(
                               child: Text('${cu.category} — ${cu.tower} ${cu.floor}',
                                   style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
@@ -107,70 +125,38 @@ class _CaptureScreenState extends State<CaptureScreen> {
                           runSpacing: 6,
                           children: [
                             SeverityChip(severity: cu.severity),
-                            StatusChip(label: cu.trade, color: AppColors.info),
+                            StatusChip(label: cu.sourceType, color: AppColors.info),
+                            if (cu.photos.isNotEmpty)
+                              StatusChip(label: '${cu.photos.length} photo(s)', color: AppColors.primary),
+                            if (cu.videoFile != null)
+                              const StatusChip(label: 'Video attached', color: AppColors.primary),
+                            if (cu.audioFile != null)
+                              const StatusChip(label: 'Audio attached', color: AppColors.primary),
                           ],
                         ),
-                        if (!cu.reflected) ...[
-                          const SizedBox(height: 10),
-                          Row(
-                            children: const [
-                              Icon(Icons.touch_app_rounded, size: 14, color: AppColors.accentTeal),
-                              SizedBox(width: 6),
-                              Text('Tap to reflect & convert to task',
-                                  style: TextStyle(fontSize: 11.5, color: AppColors.accentTeal, fontWeight: FontWeight.w600)),
-                            ],
-                          ),
-                        ],
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            if (!cu.reflected)
+                              Expanded(
+                                child: Row(
+                                  children: const [
+                                    Icon(Icons.touch_app_rounded, size: 14, color: AppColors.accentTeal),
+                                    SizedBox(width: 6),
+                                    Text('Tap to reflect & convert to task',
+                                        style: TextStyle(fontSize: 11.5, color: AppColors.accentTeal, fontWeight: FontWeight.w600)),
+                                  ],
+                                ),
+                              )
+                            else
+                              const Spacer(),
+                            CloudSyncBadge(status: cu.cloudSyncStatus),
+                          ],
+                        ),
                       ],
                     ),
                   ),
                 )),
-          const SectionHeader(
-            title: 'Photo Proof',
-            subtitle: 'Attach site photos, QA/QC evidence, safety observations',
-          ),
-          PremiumCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => _pickPhoto(ImageSource.camera),
-                        icon: const Icon(Icons.camera_alt_rounded, size: 18),
-                        label: const Text('Take Photo'),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => _pickPhoto(ImageSource.gallery),
-                        icon: const Icon(Icons.photo_library_rounded, size: 18),
-                        label: const Text('From Gallery'),
-                      ),
-                    ),
-                  ],
-                ),
-                if (_sessionPhotos.isNotEmpty) ...[
-                  const SizedBox(height: 14),
-                  SizedBox(
-                    height: 84,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: _sessionPhotos.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 8),
-                      itemBuilder: (_, i) => ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.file(_sessionPhotos[i],
-                            width: 84, height: 84, fit: BoxFit.cover),
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
           const SectionHeader(
             title: 'Site Checklist',
             subtitle: 'QA checkpoints, safety & punch-list completion',
@@ -202,10 +188,9 @@ class _ChecklistItem {
   _ChecklistItem(this.label, {this.checked = false});
 }
 
-/// The core voice capture flow — records → transcribes → AI-structures a
-/// RAW capture, then saves it to the "Captured Updates" log below. It no
-/// longer creates a task directly; that only happens after the user
-/// explicitly reflects on it (see _ReflectionSheet).
+/// ============================================================================
+/// CARD 1: Demo voice scenario capture (unchanged reliable stage-demo path).
+/// ============================================================================
 class _VoiceCaptureCard extends StatefulWidget {
   const _VoiceCaptureCard();
 
@@ -303,15 +288,12 @@ class _VoiceCaptureCardState extends State<_VoiceCaptureCard>
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: PremiumCard(
-        gradientColors: const [Color(0xFF1B2550), Color(0xFF232E52)],
-        padding: const EdgeInsets.all(18),
-        child: AnimatedSize(
-          duration: const Duration(milliseconds: 250),
-          child: _buildStageContent(),
-        ),
+    return PremiumCard(
+      gradientColors: const [Color(0xFF1B2550), Color(0xFF232E52)],
+      padding: const EdgeInsets.all(18),
+      child: AnimatedSize(
+        duration: const Duration(milliseconds: 250),
+        child: _buildStageContent(),
       ),
     );
   }
@@ -327,15 +309,15 @@ class _VoiceCaptureCardState extends State<_VoiceCaptureCard>
               children: const [
                 Icon(Icons.auto_awesome_rounded, color: AppColors.accentTeal, size: 20),
                 SizedBox(width: 8),
-                Text('Voice-based Site Update',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15.5)),
+                Text('Voice Update — Demo Scenario',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
               ],
             ),
             const SizedBox(height: 6),
             const Text(
-              'Tap and speak naturally — e.g. "Steel not delivered for Tower B, '
-              '5th floor." AI will structure it for you to review.',
-              style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary, height: 1.4),
+              'Reliable, presenter-controlled scenarios for the stage demo — '
+              'pick one, tap the mic, and AI structures it for you to review.',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4),
             ),
             const SizedBox(height: 14),
             const Text('Demo scenario to speak',
@@ -359,25 +341,20 @@ class _VoiceCaptureCardState extends State<_VoiceCaptureCard>
                 );
               }),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 16),
             Center(
               child: GestureDetector(
                 onTap: _startRecording,
                 child: Container(
-                  width: 78,
-                  height: 78,
+                  width: 64,
+                  height: 64,
                   decoration: const BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: LinearGradient(colors: [AppColors.primary, AppColors.accentTeal]),
                   ),
-                  child: const Icon(Icons.mic_rounded, color: Colors.white, size: 34),
+                  child: const Icon(Icons.mic_rounded, color: Colors.white, size: 28),
                 ),
               ),
-            ),
-            const SizedBox(height: 10),
-            const Center(
-              child: Text('Record Update',
-                  style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary)),
             ),
           ],
         );
@@ -404,30 +381,6 @@ class _VoiceCaptureCardState extends State<_VoiceCaptureCard>
                 const Spacer(),
                 Text('0:0${_recordSeconds.clamp(0, 9)}', style: const TextStyle(color: AppColors.textSecondary)),
               ],
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              height: 40,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(18, (i) {
-                  return AnimatedBuilder(
-                    animation: _pulseController,
-                    builder: (_, __) {
-                      final h = 8.0 + (24 * ((i % 4 + 1) / 4) * (0.4 + 0.6 * _pulseController.value));
-                      return Container(
-                        width: 4,
-                        height: h,
-                        margin: const EdgeInsets.symmetric(horizontal: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.accentTeal.withOpacity(0.85),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      );
-                    },
-                  );
-                }),
-              ),
             ),
           ],
         );
@@ -487,34 +440,9 @@ class _VoiceCaptureCardState extends State<_VoiceCaptureCard>
               ],
             ),
             const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppColors.accentAmber.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.accentAmber.withOpacity(0.25)),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Icon(Icons.info_outline_rounded, size: 15, color: AppColors.accentAmber),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'This is saved as a raw capture — you\'ll set owner, priority, due date '
-                      'and status in a quick reflection step before it becomes a task.',
-                      style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary, height: 1.4),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
             Row(
               children: [
-                Expanded(
-                  child: OutlinedButton(onPressed: _reset, child: const Text('Discard')),
-                ),
+                Expanded(child: OutlinedButton(onPressed: _reset, child: const Text('Discard'))),
                 const SizedBox(width: 10),
                 Expanded(
                   flex: 2,
@@ -529,6 +457,581 @@ class _VoiceCaptureCardState extends State<_VoiceCaptureCard>
           ],
         );
     }
+  }
+}
+
+/// ============================================================================
+/// CARD 2: REAL microphone recording -> audio file + typed caption -> capture.
+/// ============================================================================
+class _RealVoiceCaptureCard extends StatefulWidget {
+  const _RealVoiceCaptureCard();
+
+  @override
+  State<_RealVoiceCaptureCard> createState() => _RealVoiceCaptureCardState();
+}
+
+enum _RealVoiceStage { idle, recording, review }
+
+class _RealVoiceCaptureCardState extends State<_RealVoiceCaptureCard>
+    with SingleTickerProviderStateMixin {
+  final AudioRecorder _recorder = AudioRecorder();
+  _RealVoiceStage _stage = _RealVoiceStage.idle;
+  Timer? _timer;
+  int _seconds = 0;
+  File? _audioFile;
+  late AnimationController _pulseController;
+
+  final _captionCtrl = TextEditingController();
+  final _towerCtrl = TextEditingController();
+  final _floorCtrl = TextEditingController();
+  String _severity = 'Medium';
+  static const severities = ['Low', 'Medium', 'High', 'Critical'];
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _pulseController.dispose();
+    _captionCtrl.dispose();
+    _towerCtrl.dispose();
+    _floorCtrl.dispose();
+    _recorder.dispose();
+    super.dispose();
+  }
+
+  Future<void> _startRecording() async {
+    try {
+      final hasPermission = await _recorder.hasPermission();
+      if (!hasPermission) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Microphone permission denied.')),
+          );
+        }
+        return;
+      }
+      final dir = await getTemporaryDirectory();
+      final path = '${dir.path}/v2e_voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      await _recorder.start(const RecordConfig(), path: path);
+      setState(() {
+        _stage = _RealVoiceStage.recording;
+        _seconds = 0;
+      });
+      _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+        setState(() => _seconds++);
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not start recording on this device.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _stopRecording() async {
+    _timer?.cancel();
+    try {
+      final path = await _recorder.stop();
+      setState(() {
+        _stage = _RealVoiceStage.review;
+        _audioFile = path != null ? File(path) : null;
+      });
+    } catch (e) {
+      setState(() => _stage = _RealVoiceStage.idle);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Recording could not be saved.')),
+        );
+      }
+    }
+  }
+
+  void _reset() {
+    setState(() {
+      _stage = _RealVoiceStage.idle;
+      _audioFile = null;
+      _seconds = 0;
+      _captionCtrl.clear();
+      _towerCtrl.clear();
+      _floorCtrl.clear();
+      _severity = 'Medium';
+    });
+  }
+
+  void _saveCapture() {
+    if (_captionCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please type a short caption describing the issue.')),
+      );
+      return;
+    }
+    context.read<AppState>().saveManualCapture(
+          sourceType: 'Voice (Recorded)',
+          description: _captionCtrl.text.trim(),
+          tower: _towerCtrl.text,
+          floor: _floorCtrl.text,
+          severity: _severity,
+          audioFile: _audioFile,
+        );
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Saved to Captured Updates — reflect on it below to create a task.'),
+        backgroundColor: AppColors.success,
+      ),
+    );
+    _reset();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PremiumCard(
+      gradientColors: const [Color(0xFF17203E), Color(0xFF1E2A55)],
+      padding: const EdgeInsets.all(18),
+      child: AnimatedSize(
+        duration: const Duration(milliseconds: 250),
+        child: _buildContent(),
+      ),
+    );
+  }
+
+  Widget _buildContent() {
+    switch (_stage) {
+      case _RealVoiceStage.idle:
+        return Column(
+          key: const ValueKey('rv-idle'),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: const [
+                Icon(Icons.record_voice_over_rounded, color: AppColors.accentAmber, size: 20),
+                SizedBox(width: 8),
+                Text('Record Real Voice', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+              ],
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Records your actual voice to an audio file. You\'ll add a short '
+              'typed caption afterward (live speech-to-text isn\'t used here, '
+              'to keep this 100% reliable on any device).',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4),
+            ),
+            const SizedBox(height: 16),
+            Center(
+              child: GestureDetector(
+                onTap: _startRecording,
+                child: Container(
+                  width: 64,
+                  height: 64,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(colors: [AppColors.accentAmber, AppColors.accentCoral]),
+                  ),
+                  child: const Icon(Icons.mic_rounded, color: Colors.white, size: 28),
+                ),
+              ),
+            ),
+          ],
+        );
+      case _RealVoiceStage.recording:
+        return Column(
+          key: const ValueKey('rv-recording'),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                AnimatedBuilder(
+                  animation: _pulseController,
+                  builder: (_, __) => Container(
+                    width: 14,
+                    height: 14,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppColors.danger.withOpacity(0.4 + 0.5 * _pulseController.value),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Text('Recording…', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                const Spacer(),
+                Text(_fmtSeconds(_seconds), style: const TextStyle(color: AppColors.textSecondary)),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Center(
+              child: GestureDetector(
+                onTap: _stopRecording,
+                child: Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.danger,
+                  ),
+                  child: const Icon(Icons.stop_rounded, color: Colors.white, size: 28),
+                ),
+              ),
+            ),
+          ],
+        );
+      case _RealVoiceStage.review:
+        return Column(
+          key: const ValueKey('rv-review'),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 18),
+                const SizedBox(width: 8),
+                Text('Recording saved (${_fmtSeconds(_seconds)})',
+                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+              ],
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: _captionCtrl,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Caption — what did you report?',
+                hintText: 'e.g. Steel not delivered for Tower B, 5th floor',
+              ),
+              style: const TextStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _towerCtrl,
+                    decoration: const InputDecoration(labelText: 'Tower (optional)'),
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    controller: _floorCtrl,
+                    decoration: const InputDecoration(labelText: 'Floor (optional)'),
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            const Text('Severity', style: TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              children: severities.map((s) {
+                final selected = s == _severity;
+                return ChoiceChip(
+                  label: Text(s, style: const TextStyle(fontSize: 12)),
+                  selected: selected,
+                  onSelected: (_) => setState(() => _severity = s),
+                  selectedColor: severityColor(s).withOpacity(0.35),
+                  backgroundColor: AppColors.bgDeep,
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(child: OutlinedButton(onPressed: _reset, child: const Text('Discard'))),
+                const SizedBox(width: 10),
+                Expanded(
+                  flex: 2,
+                  child: ElevatedButton.icon(
+                    onPressed: _saveCapture,
+                    icon: const Icon(Icons.bookmark_add_rounded, size: 18),
+                    label: const Text('Save Capture'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        );
+    }
+  }
+
+  String _fmtSeconds(int s) {
+    final m = s ~/ 60;
+    final r = s % 60;
+    return '$m:${r.toString().padLeft(2, '0')}';
+  }
+}
+
+/// ============================================================================
+/// CARD 3: Photo / Video report — camera captures + required text field ->
+/// capture (per the request: "photo and video with a text field... used to
+/// create a task").
+/// ============================================================================
+class _PhotoVideoCaptureCard extends StatefulWidget {
+  const _PhotoVideoCaptureCard();
+
+  @override
+  State<_PhotoVideoCaptureCard> createState() => _PhotoVideoCaptureCardState();
+}
+
+class _PhotoVideoCaptureCardState extends State<_PhotoVideoCaptureCard> {
+  final List<File> _photos = [];
+  File? _video;
+  final _descCtrl = TextEditingController();
+  final _towerCtrl = TextEditingController();
+  final _floorCtrl = TextEditingController();
+  String _severity = 'Medium';
+  static const severities = ['Low', 'Medium', 'High', 'Critical'];
+
+  @override
+  void dispose() {
+    _descCtrl.dispose();
+    _towerCtrl.dispose();
+    _floorCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _takePhoto() async {
+    try {
+      final picker = ImagePicker();
+      final file = await picker.pickImage(source: ImageSource.camera, imageQuality: 70);
+      if (file != null) setState(() => _photos.add(File(file.path)));
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Camera not available on this device.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _recordVideo() async {
+    try {
+      final picker = ImagePicker();
+      final file = await picker.pickVideo(
+        source: ImageSource.camera,
+        maxDuration: const Duration(seconds: 60),
+      );
+      if (file != null) setState(() => _video = File(file.path));
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Camera not available on this device.')),
+        );
+      }
+    }
+  }
+
+  void _removePhoto(int index) => setState(() => _photos.removeAt(index));
+  void _removeVideo() => setState(() => _video = null);
+
+  void _saveCapture() {
+    if (_descCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please describe the issue before saving.')),
+      );
+      return;
+    }
+    String sourceType;
+    if (_photos.isNotEmpty && _video != null) {
+      sourceType = 'Photo & Video Report';
+    } else if (_photos.isNotEmpty) {
+      sourceType = 'Photo Report';
+    } else if (_video != null) {
+      sourceType = 'Video Report';
+    } else {
+      sourceType = 'Manual Report';
+    }
+    context.read<AppState>().saveManualCapture(
+          sourceType: sourceType,
+          description: _descCtrl.text.trim(),
+          tower: _towerCtrl.text,
+          floor: _floorCtrl.text,
+          severity: _severity,
+          photos: _photos.isEmpty ? null : List<File>.from(_photos),
+          videoFile: _video,
+        );
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Saved to Captured Updates — reflect on it below to create a task.'),
+        backgroundColor: AppColors.success,
+      ),
+    );
+    setState(() {
+      _photos.clear();
+      _video = null;
+      _descCtrl.clear();
+      _towerCtrl.clear();
+      _floorCtrl.clear();
+      _severity = 'Medium';
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PremiumCard(
+      gradientColors: const [Color(0xFF14213D), Color(0xFF1B2C52)],
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: const [
+              Icon(Icons.camera_alt_rounded, color: AppColors.accentTeal, size: 20),
+              SizedBox(width: 8),
+              Text('Photo / Video Report', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+            ],
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Take a photo or record a short video of the issue, describe it '
+            'below, and save — it becomes a task once you reflect on it.',
+            style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _takePhoto,
+                  icon: const Icon(Icons.camera_alt_rounded, size: 18),
+                  label: const Text('Take Photo'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _recordVideo,
+                  icon: const Icon(Icons.videocam_rounded, size: 18),
+                  label: const Text('Record Video'),
+                ),
+              ),
+            ],
+          ),
+          if (_photos.isNotEmpty || _video != null) ...[
+            const SizedBox(height: 14),
+            SizedBox(
+              height: 84,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  ..._photos.asMap().entries.map((e) => Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Stack(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.file(e.value, width: 84, height: 84, fit: BoxFit.cover),
+                            ),
+                            Positioned(
+                              top: 2,
+                              right: 2,
+                              child: GestureDetector(
+                                onTap: () => _removePhoto(e.key),
+                                child: Container(
+                                  padding: const EdgeInsets.all(3),
+                                  decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                                  child: const Icon(Icons.close_rounded, size: 14, color: Colors.white),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )),
+                  if (_video != null)
+                    Stack(
+                      children: [
+                        Container(
+                          width: 84,
+                          height: 84,
+                          decoration: BoxDecoration(
+                            color: AppColors.bgDeep,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.videocam_rounded, color: AppColors.accentTeal, size: 28),
+                        ),
+                        Positioned(
+                          top: 2,
+                          right: 2,
+                          child: GestureDetector(
+                            onTap: _removeVideo,
+                            child: Container(
+                              padding: const EdgeInsets.all(3),
+                              decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                              child: const Icon(Icons.close_rounded, size: 14, color: Colors.white),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
+          TextField(
+            controller: _descCtrl,
+            maxLines: 2,
+            decoration: const InputDecoration(
+              labelText: 'Describe the issue',
+              hintText: 'e.g. Waterproofing gap found on Tower B terrace',
+            ),
+            style: const TextStyle(fontSize: 13),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _towerCtrl,
+                  decoration: const InputDecoration(labelText: 'Tower (optional)'),
+                  style: const TextStyle(fontSize: 13),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextField(
+                  controller: _floorCtrl,
+                  decoration: const InputDecoration(labelText: 'Floor (optional)'),
+                  style: const TextStyle(fontSize: 13),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Text('Severity', style: TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            children: severities.map((s) {
+              final selected = s == _severity;
+              return ChoiceChip(
+                label: Text(s, style: const TextStyle(fontSize: 12)),
+                selected: selected,
+                onSelected: (_) => setState(() => _severity = s),
+                selectedColor: severityColor(s).withOpacity(0.35),
+                backgroundColor: AppColors.bgDeep,
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _saveCapture,
+              icon: const Icon(Icons.bookmark_add_rounded, size: 18),
+              label: const Text('Save Capture'),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -557,7 +1060,7 @@ class _ReflectionSheetState extends State<_ReflectionSheet> {
   void initState() {
     super.initState();
     final cu = widget.capturedUpdate;
-    _ownerCtrl = TextEditingController(text: cu.suggestedOwner);
+    _ownerCtrl = TextEditingController(text: cu.suggestedOwner == 'Unassigned' ? '' : cu.suggestedOwner);
     _notesCtrl = TextEditingController();
     _priority = defaultPriorityForSeverity(cu.severity);
     _status = (cu.severity == 'Critical' || cu.severity == 'High') ? 'Blocked' : 'Open';
@@ -631,10 +1134,10 @@ class _ReflectionSheetState extends State<_ReflectionSheet> {
             ),
             const SizedBox(height: 16),
             Row(
-              children: const [
-                Icon(Icons.auto_awesome_rounded, color: AppColors.accentAmber, size: 18),
-                SizedBox(width: 8),
-                Text('Reflect & Convert to Task', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+              children: [
+                Icon(_iconForSourceType(cu.sourceType), color: AppColors.accentAmber, size: 18),
+                const SizedBox(width: 8),
+                const Text('Reflect & Convert to Task', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
               ],
             ),
             const SizedBox(height: 10),
@@ -645,6 +1148,21 @@ class _ReflectionSheetState extends State<_ReflectionSheet> {
               child: Text('"${cu.transcript}"',
                   style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: AppColors.textSecondary)),
             ),
+            if (cu.hasMedia) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  if (cu.photos.isNotEmpty)
+                    StatusChip(label: '${cu.photos.length} photo(s) attached', color: AppColors.primary),
+                  if (cu.videoFile != null)
+                    const StatusChip(label: 'Video attached', color: AppColors.primary),
+                  if (cu.audioFile != null)
+                    const StatusChip(label: 'Audio attached', color: AppColors.primary),
+                ],
+              ),
+            ],
             const SizedBox(height: 12),
             Wrap(
               spacing: 6,
