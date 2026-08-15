@@ -41,17 +41,29 @@ class _ProcurementQaScreenState extends State<ProcurementQaScreen>
           ),
           child: TabBar(
             controller: _tabController,
+            // FIX: force the selection indicator to fill the ENTIRE tab
+            // segment (not just wrap tightly around the label text). The
+            // default TabBarIndicatorSize.label only sizes the indicator to
+            // the text width, which looked inconsistent between the two
+            // tabs (different label lengths) when switching. indicatorPadding
+            // adds a small inset so the pill doesn't touch the edges of its
+            // segment, while still covering the full tappable area.
+            indicatorSize: TabBarIndicatorSize.tab,
+            indicatorPadding: const EdgeInsets.all(4),
             indicator: BoxDecoration(
               color: AppColors.primary,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(12),
             ),
+            splashBorderRadius: BorderRadius.circular(14),
             labelColor: Colors.white,
             unselectedLabelColor: AppColors.textSecondary,
             dividerColor: Colors.transparent,
             labelStyle: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+            // Tab already stretches to fill its full segment width/height,
+            // so the whole segment (not just the text) is tappable/touchable.
             tabs: const [
-              Tab(text: 'Procurement Tracker'),
-              Tab(text: 'QA / Snag Management'),
+              Tab(height: 44, child: Center(child: Text('Procurement Tracker'))),
+              Tab(height: 44, child: Center(child: Text('QA / Snag Management'))),
             ],
           ),
         ),
@@ -137,14 +149,22 @@ class _ProcurementTab extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 10),
+                    // FIX: the bottom row now ALWAYS shows something on the
+                    // right — either a "Mark <next stage>" action or a
+                    // "Completed" indicator for delivered items — instead of
+                    // sometimes being empty (as it was for "Delayed" items,
+                    // which had no next stage in the old logic and left an
+                    // awkward gap next to the required-by date).
                     Row(
                       children: [
                         const Icon(Icons.event_rounded, size: 14, color: AppColors.textSecondary),
                         const SizedBox(width: 6),
-                        Text('Required by ${df.format(p.requiredBy)}',
-                            style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary)),
+                        Flexible(
+                          child: Text('Required by ${df.format(p.requiredBy)}',
+                              style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary)),
+                        ),
                         const Spacer(),
-                        _StatusCycleButton(item: p),
+                        _StatusCycleAction(item: p),
                       ],
                     ),
                   ],
@@ -156,22 +176,57 @@ class _ProcurementTab extends StatelessWidget {
   }
 }
 
-class _StatusCycleButton extends StatelessWidget {
+/// Always renders something in the trailing slot of the material card's
+/// bottom row — either a tappable "Mark <next>" action, or a "Completed"
+/// marker for terminal (Delivered) items — so every card has consistent
+/// visual weight regardless of its current status.
+class _StatusCycleAction extends StatelessWidget {
   final ProcurementItem item;
-  const _StatusCycleButton({required this.item});
+  const _StatusCycleAction({required this.item});
 
   static const stages = ['Requested', 'Confirmed', 'In Transit', 'Delivered'];
 
+  String? _nextStatus(String current) {
+    if (current == 'Delayed') {
+      // A resolved delay resumes as "In Transit".
+      return 'In Transit';
+    }
+    final idx = stages.indexOf(current);
+    if (idx >= 0 && idx < stages.length - 1) return stages[idx + 1];
+    return null; // Delivered — terminal, nothing further to mark.
+  }
+
   @override
   Widget build(BuildContext context) {
-    final idx = stages.indexOf(item.status);
-    final next = idx >= 0 && idx < stages.length - 1 ? stages[idx + 1] : null;
-    if (next == null) return const SizedBox.shrink();
-    return TextButton.icon(
-      onPressed: () => context.read<AppState>().updateProcurementStatus(item.id, next),
-      icon: const Icon(Icons.arrow_forward_rounded, size: 14),
-      label: Text('Mark $next', style: const TextStyle(fontSize: 11.5)),
-      style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8)),
+    final next = _nextStatus(item.status);
+    if (next == null) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: const [
+          Icon(Icons.check_circle_rounded, size: 14, color: AppColors.success),
+          SizedBox(width: 4),
+          Text('Completed', style: TextStyle(fontSize: 11.5, color: AppColors.success, fontWeight: FontWeight.w600)),
+        ],
+      );
+    }
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => context.read<AppState>().updateProcurementStatus(item.id, next),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.arrow_forward_rounded, size: 14, color: AppColors.primary),
+              const SizedBox(width: 4),
+              Text('Mark $next',
+                  style: const TextStyle(fontSize: 11.5, color: AppColors.primary, fontWeight: FontWeight.w600)),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

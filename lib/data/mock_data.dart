@@ -106,6 +106,21 @@ const List<DemoTranscript> demoTranscripts = [
   ),
 ];
 
+/// Maps AI-detected severity to a sensible default priority, used to
+/// pre-fill the reflection step (still fully editable by the user).
+String defaultPriorityForSeverity(String severity) {
+  switch (severity.toLowerCase()) {
+    case 'critical':
+      return 'Urgent';
+    case 'high':
+      return 'High';
+    case 'medium':
+      return 'Medium';
+    default:
+      return 'Low';
+  }
+}
+
 class MockData {
   static List<SiteTask> seedTasks() {
     final now = DateTime.now();
@@ -120,6 +135,7 @@ class MockData {
         trade: 'Structural / RCC',
         vendor: 'Shah Steel Suppliers',
         severity: 'High',
+        priority: 'High',
         status: 'Blocked',
         owner: 'Procurement Lead',
         dueDate: now.add(const Duration(days: 1)),
@@ -135,6 +151,7 @@ class MockData {
         trade: 'Civil / QA',
         vendor: 'N/A',
         severity: 'Critical',
+        priority: 'Urgent',
         status: 'In Progress',
         owner: 'QA Engineer',
         dueDate: now.add(const Duration(days: 1)),
@@ -150,6 +167,7 @@ class MockData {
         trade: 'Safety / Scaffolding',
         vendor: 'Apex Scaffolds',
         severity: 'Critical',
+        priority: 'Urgent',
         status: 'Blocked',
         owner: 'Safety Officer',
         dueDate: now.add(const Duration(days: 1)),
@@ -165,6 +183,7 @@ class MockData {
         trade: 'Electrical (MEP)',
         vendor: 'N/A',
         severity: 'Low',
+        priority: 'Low',
         status: 'In Progress',
         owner: 'MEP Site Engineer',
         dueDate: now.add(const Duration(days: 2)),
@@ -179,6 +198,7 @@ class MockData {
         trade: 'Civil / Plastering',
         vendor: 'Ambuja Cement Distributor',
         severity: 'Medium',
+        priority: 'Medium',
         status: 'Open',
         owner: 'Procurement Lead',
         dueDate: now.add(const Duration(days: 2)),
@@ -194,6 +214,7 @@ class MockData {
         trade: 'Finishing / Tiling',
         vendor: 'N/A',
         severity: 'Low',
+        priority: 'Low',
         status: 'Resolved',
         owner: 'Finishing Supervisor',
         dueDate: now.subtract(const Duration(days: 1)),
@@ -306,6 +327,7 @@ class MockData {
     final now = DateTime.now();
     return [
       StandupEntry(
+        id: 'su1',
         date: now,
         present: 42,
         totalCrew: 48,
@@ -322,6 +344,27 @@ class MockData {
         blockedItems: [
           'Slab shuttering blocked — steel delivery delay',
           'Plastering paused — cement in transit',
+        ],
+        keyLearnings: [
+          'Vendor confirmations should happen 48h before required-by date, not 24h.',
+        ],
+      ),
+      StandupEntry(
+        id: 'su0',
+        date: now.subtract(const Duration(days: 1)),
+        present: 44,
+        totalCrew: 48,
+        plannedYesterday: [
+          'Formwork — Tower B 5th floor',
+          'MEP first fix — Tower A 3rd floor',
+        ],
+        completedYesterday: [
+          'Formwork — Tower B 5th floor',
+          'MEP first fix — Tower A 3rd floor',
+        ],
+        blockedItems: [],
+        keyLearnings: [
+          'Early morning concrete pours avoided the afternoon heat delay.',
         ],
       ),
     ];

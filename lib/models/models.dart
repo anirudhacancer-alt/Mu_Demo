@@ -24,7 +24,8 @@ class SiteTask {
   String floor;
   String trade;
   String vendor;
-  String severity; // Low / Medium / High / Critical
+  String severity; // Low / Medium / High / Critical — how bad the issue is
+  String priority; // Low / Medium / High / Urgent — how urgently to act
   String status; // Open / In Progress / Blocked / Resolved
   String owner;
   DateTime dueDate;
@@ -32,6 +33,7 @@ class SiteTask {
   bool isBlocker;
   final List<File> photos;
   final String? sourceTranscript;
+  final String? sourceCapturedUpdateId;
 
   SiteTask({
     required this.id,
@@ -42,6 +44,7 @@ class SiteTask {
     required this.trade,
     required this.vendor,
     required this.severity,
+    this.priority = 'Medium',
     required this.status,
     required this.owner,
     required this.dueDate,
@@ -49,6 +52,7 @@ class SiteTask {
     this.isBlocker = false,
     List<File>? photos,
     this.sourceTranscript,
+    this.sourceCapturedUpdateId,
   })  : createdAt = createdAt ?? DateTime.now(),
         photos = photos ?? [];
 
@@ -103,22 +107,29 @@ class SnagItem {
   }) : photos = photos ?? [];
 }
 
+/// A single daily standup reflection entry. Multiple entries accumulate over
+/// time into a running history (rather than the standup info disappearing
+/// after the meeting).
 class StandupEntry {
+  final String id;
   final DateTime date;
   int present;
   int totalCrew;
   List<String> plannedYesterday;
   List<String> completedYesterday;
   List<String> blockedItems;
+  List<String> keyLearnings;
 
   StandupEntry({
+    required this.id,
     required this.date,
     required this.present,
     required this.totalCrew,
     required this.plannedYesterday,
     required this.completedYesterday,
     required this.blockedItems,
-  });
+    List<String>? keyLearnings,
+  }) : keyLearnings = keyLearnings ?? [];
 
   double get plannedVsDonePercent => plannedYesterday.isEmpty
       ? 0
@@ -129,9 +140,12 @@ class StandupEntry {
     final blockedText = blockedItems.isEmpty
         ? 'No blockers reported.'
         : 'Blocked: ${blockedItems.join('; ')}.';
+    final learningsText = keyLearnings.isEmpty
+        ? ''
+        : ' Key learnings: ${keyLearnings.join('; ')}.';
     return 'Attendance $present/$totalCrew. Planned vs done: $pct% '
         '(${completedYesterday.length}/${plannedYesterday.length} tasks completed). '
-        '$blockedText';
+        '$blockedText$learningsText';
   }
 }
 
@@ -178,7 +192,12 @@ class SprintModel {
       endDate.difference(DateTime.now()).inDays.clamp(0, 999);
 }
 
-class VoiceUpdate {
+/// Raw captured field information (voice/photo/observation) BEFORE it has
+/// been reflected on and turned into an actionable task. This is the
+/// "capture-to-task reflection" staging area: captures land here first,
+/// and only become a SiteTask once a user explicitly reflects on them and
+/// sets owner/priority/due date/status.
+class CapturedUpdate {
   final String id;
   final String transcript;
   final String category;
@@ -190,8 +209,10 @@ class VoiceUpdate {
   final String suggestedOwner;
   final DateTime suggestedDueDate;
   final DateTime createdAt;
+  bool reflected;
+  String? linkedTaskId;
 
-  VoiceUpdate({
+  CapturedUpdate({
     required this.id,
     required this.transcript,
     required this.category,
@@ -203,6 +224,8 @@ class VoiceUpdate {
     required this.suggestedOwner,
     required this.suggestedDueDate,
     DateTime? createdAt,
+    this.reflected = false,
+    this.linkedTaskId,
   }) : createdAt = createdAt ?? DateTime.now();
 }
 

@@ -7,19 +7,30 @@ class AppState extends ChangeNotifier {
   UserRole? currentRole;
   String userName = 'Anirudha';
 
+  /// Set true right after a (real or demo-switch) login, so the home
+  /// screen can show a one-time "Logged in as X" confirmation, then reset
+  /// to false. Satisfies the "role identification after login" requirement.
+  bool justLoggedIn = false;
+
   final List<SiteTask> tasks = MockData.seedTasks();
   final List<ProcurementItem> procurementItems = MockData.seedProcurement();
   final List<SnagItem> snags = MockData.seedSnags();
   final List<StandupEntry> standups = MockData.seedStandups();
   final SprintModel sprint = MockData.seedSprint();
   final List<RiskAlert> baseRisks = MockData.seedRisks();
-  final List<VoiceUpdate> voiceUpdates = [];
+
+  /// Raw captures awaiting reflection (capture-to-task staging area).
+  final List<CapturedUpdate> capturedUpdates = [];
 
   int _idCounter = 100;
   String _nextId(String prefix) => '$prefix${_idCounter++}';
 
-  void login(UserRole role) {
+  void login(UserRole role, {String? username}) {
     currentRole = role;
+    if (username != null && username.trim().isNotEmpty) {
+      userName = username.trim();
+    }
+    justLoggedIn = true;
     notifyListeners();
   }
 
@@ -28,10 +39,13 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ---------------- Capture / Voice ----------------
-  VoiceUpdate recordVoiceUpdate(DemoTranscript demo) {
-    final update = VoiceUpdate(
-      id: _nextId('vu'),
+  // ---------------- Capture → Reflection → Task ----------------
+
+  /// Step 1: save a raw capture (voice/photo/observation) WITHOUT creating
+  /// a task yet. It sits in `capturedUpdates` pending reflection.
+  CapturedUpdate saveCapturedUpdate(DemoTranscript demo) {
+    final cu = CapturedUpdate(
+      id: _nextId('cu'),
       transcript: demo.text,
       category: demo.category,
       trade: demo.trade,
@@ -42,34 +56,51 @@ class AppState extends ChangeNotifier {
       suggestedOwner: demo.suggestedOwner,
       suggestedDueDate: DateTime.now().add(Duration(days: demo.dueInDays)),
     );
-    voiceUpdates.insert(0, update);
+    capturedUpdates.insert(0, cu);
     notifyListeners();
-    return update;
+    return cu;
   }
 
-  SiteTask createTaskFromVoiceUpdate(VoiceUpdate u, {List<File>? photos}) {
+  /// Step 2: user reflects on a raw capture and explicitly converts it
+  /// into an actionable SiteTask with owner/priority/due date/status.
+  SiteTask reflectAndConvert({
+    required String capturedUpdateId,
+    required String owner,
+    required String priority,
+    required DateTime dueDate,
+    required String status,
+    String? notes,
+  }) {
+    final cu = capturedUpdates.firstWhere((c) => c.id == capturedUpdateId);
+    final description = (notes != null && notes.trim().isNotEmpty)
+        ? '${cu.transcript}\n\nReflection notes: ${notes.trim()}'
+        : cu.transcript;
     final task = SiteTask(
       id: _nextId('t'),
-      title: '${u.category} — ${u.tower} ${u.floor}',
-      description: u.transcript,
-      tower: u.tower,
-      floor: u.floor,
-      trade: u.trade,
-      vendor: u.vendor,
-      severity: u.severity,
-      status: (u.severity == 'Critical' || u.severity == 'High')
-          ? 'Blocked'
-          : 'Open',
-      owner: u.suggestedOwner,
-      dueDate: u.suggestedDueDate,
-      isBlocker: u.severity == 'Critical' || u.severity == 'High',
-      photos: photos,
-      sourceTranscript: u.transcript,
+      title: '${cu.category} — ${cu.tower} ${cu.floor}',
+      description: description,
+      tower: cu.tower,
+      floor: cu.floor,
+      trade: cu.trade,
+      vendor: cu.vendor,
+      severity: cu.severity,
+      priority: priority,
+      status: status,
+      owner: owner,
+      dueDate: dueDate,
+      isBlocker: status == 'Blocked',
+      sourceTranscript: cu.transcript,
+      sourceCapturedUpdateId: cu.id,
     );
     tasks.insert(0, task);
+    cu.reflected = true;
+    cu.linkedTaskId = task.id;
     notifyListeners();
     return task;
   }
+
+  int get pendingReflectionCount =>
+      capturedUpdates.where((c) => !c.reflected).length;
 
   void addManualTask(SiteTask task) {
     tasks.insert(0, task);
@@ -79,6 +110,12 @@ class AppState extends ChangeNotifier {
   void updateTaskStatus(String id, String status) {
     final t = tasks.firstWhere((e) => e.id == id);
     t.status = status;
+    notifyListeners();
+  }
+
+  void updateTaskPriority(String id, String priority) {
+    final t = tasks.firstWhere((e) => e.id == id);
+    t.priority = priority;
     notifyListeners();
   }
 
@@ -130,11 +167,22 @@ class AppState extends ChangeNotifier {
 
   int get openSnagsCount => snags.where((s) => s.status == 'Open').length;
 
-  // ---------------- Standup ----------------
+  // ---------------- Standup reflection (continuous record) ----------------
   void submitStandup(StandupEntry entry) {
     standups.insert(0, entry);
     notifyListeners();
   }
+
+  StandupEntry newEmptyStandupDraft() => StandupEntry(
+        id: _nextId('su'),
+        date: DateTime.now(),
+        present: 0,
+        totalCrew: 0,
+        plannedYesterday: [],
+        completedYesterday: [],
+        blockedItems: [],
+        keyLearnings: [],
+      );
 
   // ---------------- Control Tower ----------------
   List<RiskAlert> get riskAlerts {

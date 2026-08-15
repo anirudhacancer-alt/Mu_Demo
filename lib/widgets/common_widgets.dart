@@ -165,6 +165,14 @@ class SeverityChip extends StatelessWidget {
       StatusChip(label: severity, color: severityColor(severity));
 }
 
+class PriorityChip extends StatelessWidget {
+  final String priority;
+  const PriorityChip({super.key, required this.priority});
+  @override
+  Widget build(BuildContext context) =>
+      StatusChip(label: 'Priority: $priority', color: priorityColor(priority));
+}
+
 class TaskStatusChip extends StatelessWidget {
   final String status;
   const TaskStatusChip({super.key, required this.status});
@@ -210,6 +218,114 @@ class ProgressBarLine extends StatelessWidget {
         backgroundColor: Colors.white.withOpacity(0.08),
         valueColor: AlwaysStoppedAnimation(color),
       ),
+    );
+  }
+}
+
+/// A reusable "tag list" input: shows existing tags as removable chips and
+/// an add-row (text field + full-size tappable add button) below. Used for
+/// the standup reflection form (planned / completed / blocked / learnings).
+class TagListField extends StatefulWidget {
+  final String label;
+  final List<String> items;
+  final String hintText;
+  final Color chipColor;
+  final ValueChanged<List<String>> onChanged;
+
+  const TagListField({
+    super.key,
+    required this.label,
+    required this.items,
+    required this.onChanged,
+    this.hintText = 'Type and tap Add…',
+    this.chipColor = AppColors.primary,
+  });
+
+  @override
+  State<TagListField> createState() => _TagListFieldState();
+}
+
+class _TagListFieldState extends State<TagListField> {
+  final _controller = TextEditingController();
+
+  void _add() {
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
+    final updated = [...widget.items, text];
+    widget.onChanged(updated);
+    _controller.clear();
+  }
+
+  void _remove(int index) {
+    final updated = [...widget.items]..removeAt(index);
+    widget.onChanged(updated);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(widget.label,
+            style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary)),
+        const SizedBox(height: 8),
+        if (widget.items.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: List.generate(widget.items.length, (i) {
+                return InputChip(
+                  label: Text(widget.items[i], style: const TextStyle(fontSize: 12)),
+                  onDeleted: () => _remove(i),
+                  backgroundColor: widget.chipColor.withOpacity(0.15),
+                  deleteIconColor: widget.chipColor,
+                  side: BorderSide(color: widget.chipColor.withOpacity(0.3)),
+                );
+              }),
+            ),
+          ),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _controller,
+                onSubmitted: (_) => _add(),
+                decoration: InputDecoration(
+                  hintText: widget.hintText,
+                  isDense: true,
+                ),
+                style: const TextStyle(fontSize: 13),
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Full-size tappable add button (not just a small icon) so the
+            // whole control is easy to tap.
+            Material(
+              color: widget.chipColor,
+              borderRadius: BorderRadius.circular(12),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: _add,
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                  child: Icon(Icons.add_rounded, color: Colors.white, size: 20),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

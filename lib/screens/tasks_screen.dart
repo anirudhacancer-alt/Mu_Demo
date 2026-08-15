@@ -119,6 +119,7 @@ class _TaskCard extends StatelessWidget {
               children: [
                 TaskStatusChip(status: task.status),
                 SeverityChip(severity: task.severity),
+                PriorityChip(priority: task.priority),
                 if (task.isBlocker)
                   StatusChip(label: 'Aging ${task.agingDays}d', color: AppColors.accentCoral),
               ],
@@ -173,6 +174,7 @@ class _TaskDetailSheet extends StatefulWidget {
 
 class _TaskDetailSheetState extends State<_TaskDetailSheet> {
   static const statuses = ['Open', 'In Progress', 'Blocked', 'Resolved'];
+  static const priorities = ['Low', 'Medium', 'High', 'Urgent'];
 
   @override
   Widget build(BuildContext context) {
@@ -225,7 +227,26 @@ class _TaskDetailSheetState extends State<_TaskDetailSheet> {
               ],
             ),
             const SizedBox(height: 18),
-            const Text('Update status', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+            const Text('Priority', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              children: priorities.map((p) {
+                final selected = p == task.priority;
+                return ChoiceChip(
+                  label: Text(p, style: const TextStyle(fontSize: 12)),
+                  selected: selected,
+                  onSelected: (_) {
+                    context.read<AppState>().updateTaskPriority(task.id, p);
+                    setState(() {});
+                  },
+                  selectedColor: priorityColor(p).withOpacity(0.35),
+                  backgroundColor: AppColors.surfaceLight,
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 18),
+            const Text('Status', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,

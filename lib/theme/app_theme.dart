@@ -62,6 +62,22 @@ Color statusColor(String status) {
   }
 }
 
+/// Priority is distinct from severity: severity = how bad the issue is;
+/// priority = how urgently it should be worked, set during the
+/// capture-to-task reflection step.
+Color priorityColor(String priority) {
+  switch (priority.toLowerCase()) {
+    case 'urgent':
+      return AppColors.danger;
+    case 'high':
+      return AppColors.accentCoral;
+    case 'medium':
+      return AppColors.warning;
+    default:
+      return AppColors.info; // Low
+  }
+}
+
 ThemeData buildAppTheme() {
   final base = ThemeData.dark(useMaterial3: true);
   return base.copyWith(
