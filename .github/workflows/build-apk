@@ -36,6 +36,24 @@ jobs:
         # NOT touch existing pubspec.yaml or lib/ files.
         run: flutter create . --platforms=android --org com.v2e.demo --project-name sitevoice_v2e
 
+      - name: Raise Android minSdkVersion to 23
+        # The `record` package (real microphone recording) requires
+        # minSdk 23, and Firebase plugins require at least 19-23 depending
+        # on version. `flutter create` defaults to flutter.minSdkVersion
+        # (usually 21), so we bump it here. Handles both the older Groovy
+        # build.gradle syntax and the newer Kotlin DSL build.gradle.kts
+        # syntax — whichever one this Flutter version generates.
+        run: |
+          if [ -f android/app/build.gradle ]; then
+            sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 23/' android/app/build.gradle || true
+            sed -i 's/minSdkVersion flutter\.minSdkVersion/minSdkVersion 23/' android/app/build.gradle || true
+          fi
+          if [ -f android/app/build.gradle.kts ]; then
+            sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 23/' android/app/build.gradle.kts || true
+          fi
+          echo "---- resulting minSdk lines ----"
+          grep -rn "minSdk" android/app/build.gradle* || true
+
       - name: Install dependencies
         run: flutter pub get
 
